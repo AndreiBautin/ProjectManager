@@ -43,7 +43,10 @@ public class ActionsController : ControllerBase
     [HttpPut("api/actions/{id}")]
     public async Task<ActionResult<ActionDto>> Update(int id, UpdateActionRequest request)
     {
-        var action = await _db.Actions.Include(a => a.Project).FirstOrDefaultAsync(a => a.Id == id);
+        var action = await _db.Actions
+            .Include(a => a.Project)
+            .ThenInclude(p => p!.Actions)
+            .FirstOrDefaultAsync(a => a.Id == id);
         if (action == null) return NotFound();
 
         if (!string.IsNullOrWhiteSpace(request.Description))
@@ -66,8 +69,29 @@ public class ActionsController : ControllerBase
             action.CompletedDate = parsedStatus == ActionStatus.Done ? DateTime.UtcNow : null;
         }
 
-        if (action.Project != null)
-            action.Project.UpdatedDate = DateTime.UtcNow;
+        var project = action.Project;
+        if (project != null)
+        {
+            project.UpdatedDate = DateTime.UtcNow;
+
+            // Finishing the last pending action closes the project out - there's
+            // nothing left to recommend, so "next suggested task" would otherwise
+            // point at a project that's actually done.
+            var allActionsDone = project.Actions.Count > 0 && project.Actions.All(a => a.Status == ActionStatus.Done);
+            if (allActionsDone && project.Status != ProjectStatus.Completed)
+            {
+                project.Status = ProjectStatus.Completed;
+                project.Progress = 100;
+                project.CompletedDate = DateTime.UtcNow;
+            }
+            else if (!allActionsDone && project.Status == ProjectStatus.Completed)
+            {
+                // Reopening an action (e.g. unchecking it by mistake) un-completes
+                // the project rather than leaving it Completed with pending work.
+                project.Status = project.IsBlocked ? ProjectStatus.Blocked : ProjectStatus.Active;
+                project.CompletedDate = null;
+            }
+        }
 
         await _db.SaveChangesAsync();
         return Ok(action.ToDto());
