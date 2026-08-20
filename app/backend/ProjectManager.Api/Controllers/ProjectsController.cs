@@ -12,10 +12,16 @@ namespace ProjectManager.Api.Controllers;
 public class ProjectsController : ControllerBase
 {
     private readonly AppDbContext _db;
-    public ProjectsController(AppDbContext db) => _db = db;
+    private readonly BlockingService _blocking;
+    public ProjectsController(AppDbContext db, BlockingService blocking)
+    {
+        _db = db;
+        _blocking = blocking;
+    }
 
     private IQueryable<Project> ProjectsWithIncludes() =>
-        _db.Projects.Include(p => p.Category).Include(p => p.Actions);
+        _db.Projects.Include(p => p.Category).Include(p => p.Actions)
+            .Include(p => p.Blockers).ThenInclude(b => b.BlockingProject);
 
     // GET /api/projects?status=Active,Blocked
     // Default (no filter): everything except Completed.
@@ -67,6 +73,10 @@ public class ProjectsController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Name))
             return BadRequest("Project name is required.");
 
+        var blockerIds = (request.BlockedByProjectIds ?? new List<int>()).Distinct().ToList();
+        var blockerError = await _blocking.ValidateBlockersAsync(0, blockerIds);
+        if (blockerError != null) return BadRequest(blockerError);
+
         int? categoryId = request.CategoryId;
         if (categoryId == null && !string.IsNullOrWhiteSpace(request.NewCategoryName))
         {
@@ -82,6 +92,10 @@ public class ProjectsController : ControllerBase
             categoryId = existingCategory.Id;
         }
 
+        var blockedByOpenProjects = blockerIds.Count > 0 && await _db.Projects
+            .Where(p => blockerIds.Contains(p.Id) && p.Status != ProjectStatus.Completed)
+            .AnyAsync();
+
         var now = DateTime.UtcNow;
         var project = new Project
         {
@@ -94,11 +108,15 @@ public class ProjectsController : ControllerBase
             IsBlocked = request.IsBlocked,
             BlockReason = request.IsBlocked ? request.BlockReason : null,
             Deadline = request.Deadline,
-            Status = request.IsBlocked ? ProjectStatus.Blocked : ProjectStatus.Active,
-            Progress = 0,
+            Status = (request.IsBlocked || blockedByOpenProjects) ? ProjectStatus.Blocked : ProjectStatus.Active,
             CreatedDate = now,
             UpdatedDate = now
         };
+
+        foreach (var blockerId in blockerIds)
+        {
+            project.Blockers.Add(new ProjectBlocker { BlockingProjectId = blockerId });
+        }
 
         if (!string.IsNullOrWhiteSpace(request.FirstActionDescription))
         {
@@ -127,26 +145,36 @@ public class ProjectsController : ControllerBase
         if (!Enum.TryParse<ProjectStatus>(request.Status, true, out var requestedStatus))
             return BadRequest("Invalid status value.");
 
+        var blockerIds = (request.BlockedByProjectIds ?? new List<int>()).Distinct().ToList();
+        var blockerError = await _blocking.ValidateBlockersAsync(id, blockerIds);
+        if (blockerError != null) return BadRequest(blockerError);
+
         project.Name = request.Name.Trim();
         project.Description = request.Description;
         project.CategoryId = request.CategoryId;
         project.Impact = Clamp(request.Impact);
         project.Urgency = Clamp(request.Urgency);
         project.Effort = Clamp(request.Effort);
-        project.Progress = Math.Clamp(request.Progress, 0, 100);
         project.IsBlocked = request.IsBlocked;
         project.BlockReason = request.IsBlocked ? request.BlockReason : null;
         project.Deadline = request.Deadline;
 
-        // Status derivation: IsBlocked and Status must agree, except Completed/Paused
-        // are explicit user choices that take precedence over blocked-derivation.
+        _blocking.SyncBlockers(project, blockerIds);
+
+        var blockedByOpenProjects = blockerIds.Count > 0 && await _db.Projects
+            .Where(p => blockerIds.Contains(p.Id) && p.Status != ProjectStatus.Completed)
+            .AnyAsync();
+
+        // Status derivation: IsBlocked/blocked-by-other-projects and Status must
+        // agree, except Completed/Paused are explicit user choices that take
+        // precedence over blocked-derivation.
         if (requestedStatus == ProjectStatus.Completed || requestedStatus == ProjectStatus.Paused)
         {
             project.Status = requestedStatus;
         }
         else
         {
-            project.Status = project.IsBlocked ? ProjectStatus.Blocked : ProjectStatus.Active;
+            project.Status = (project.IsBlocked || blockedByOpenProjects) ? ProjectStatus.Blocked : ProjectStatus.Active;
         }
 
         if (project.Status == ProjectStatus.Completed && project.CompletedDate == null)
@@ -157,6 +185,11 @@ public class ProjectsController : ControllerBase
         project.UpdatedDate = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        // Cheap enough for a single-user local app to run unconditionally - this
+        // is what lets a dependent project auto-flip back to Active once every
+        // project blocking it (this one included) reaches Completed.
+        await _blocking.RecomputeDependentsAsync(id);
 
         var updated = await ProjectsWithIncludes().FirstAsync(p => p.Id == id);
         return Ok(updated.ToDto());
@@ -169,12 +202,14 @@ public class ProjectsController : ControllerBase
         if (project == null) return NotFound();
 
         project.Status = ProjectStatus.Completed;
-        project.Progress = 100;
         project.CompletedDate = DateTime.UtcNow;
         project.UpdatedDate = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
-        return Ok(project.ToDto());
+        await _blocking.RecomputeDependentsAsync(id);
+
+        var updated = await ProjectsWithIncludes().FirstAsync(p => p.Id == id);
+        return Ok(updated.ToDto());
     }
 
     [HttpDelete("{id}")]
@@ -183,8 +218,15 @@ public class ProjectsController : ControllerBase
         var project = await _db.Projects.FindAsync(id);
         if (project == null) return NotFound();
 
+        // Capture dependents before deleting - the join rows referencing this
+        // project are gone via cascade delete once it's removed.
+        var dependentIds = await _blocking.GetDependentIdsAsync(id);
+
         _db.Projects.Remove(project);
         await _db.SaveChangesAsync();
+
+        await _blocking.RecomputeAsync(dependentIds);
+
         return NoContent();
     }
 

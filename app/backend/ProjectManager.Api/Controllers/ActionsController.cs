@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using ProjectManager.Api.Data;
 using ProjectManager.Api.Dtos;
 using ProjectManager.Api.Models;
+using ProjectManager.Api.Services;
 
 namespace ProjectManager.Api.Controllers;
 
@@ -10,7 +11,12 @@ namespace ProjectManager.Api.Controllers;
 public class ActionsController : ControllerBase
 {
     private readonly AppDbContext _db;
-    public ActionsController(AppDbContext db) => _db = db;
+    private readonly BlockingService _blocking;
+    public ActionsController(AppDbContext db, BlockingService blocking)
+    {
+        _db = db;
+        _blocking = blocking;
+    }
 
     [HttpPost("api/projects/{projectId}/actions")]
     public async Task<ActionResult<ActionDto>> Create(int projectId, CreateActionRequest request)
@@ -44,8 +50,8 @@ public class ActionsController : ControllerBase
     public async Task<ActionResult<ActionDto>> Update(int id, UpdateActionRequest request)
     {
         var action = await _db.Actions
-            .Include(a => a.Project)
-            .ThenInclude(p => p!.Actions)
+            .Include(a => a.Project).ThenInclude(p => p!.Actions)
+            .Include(a => a.Project).ThenInclude(p => p!.Blockers).ThenInclude(b => b.BlockingProject)
             .FirstOrDefaultAsync(a => a.Id == id);
         if (action == null) return NotFound();
 
@@ -70,6 +76,8 @@ public class ActionsController : ControllerBase
         }
 
         var project = action.Project;
+        var wasCompleted = project?.Status == ProjectStatus.Completed;
+
         if (project != null)
         {
             project.UpdatedDate = DateTime.UtcNow;
@@ -81,19 +89,26 @@ public class ActionsController : ControllerBase
             if (allActionsDone && project.Status != ProjectStatus.Completed)
             {
                 project.Status = ProjectStatus.Completed;
-                project.Progress = 100;
                 project.CompletedDate = DateTime.UtcNow;
             }
             else if (!allActionsDone && project.Status == ProjectStatus.Completed)
             {
                 // Reopening an action (e.g. unchecking it by mistake) un-completes
                 // the project rather than leaving it Completed with pending work.
-                project.Status = project.IsBlocked ? ProjectStatus.Blocked : ProjectStatus.Active;
+                project.Status = PriorityEngine.DeriveStatus(project, ProjectStatus.Active);
                 project.CompletedDate = null;
             }
         }
 
         await _db.SaveChangesAsync();
+
+        // A Completed <-> non-Completed transition here can unblock (or re-block)
+        // whatever else was waiting on this project.
+        if (project != null && wasCompleted != (project.Status == ProjectStatus.Completed))
+        {
+            await _blocking.RecomputeDependentsAsync(project.Id);
+        }
+
         return Ok(action.ToDto());
     }
 

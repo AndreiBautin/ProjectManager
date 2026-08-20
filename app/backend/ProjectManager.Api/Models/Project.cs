@@ -14,10 +14,16 @@ public class Project
     public int Effort { get; set; } = 5;
 
     public ProjectStatus Status { get; set; } = ProjectStatus.Active;
-    public int Progress { get; set; } = 0;
+
+    // Progress is not stored - it's derived from how many Actions are Done.
+    // See PriorityEngine.ComputeProgress, surfaced on ProjectDto.
 
     public bool IsBlocked { get; set; } = false;
     public string? BlockReason { get; set; }
+
+    // Projects blocking me (I am ProjectBlocker.ProjectId). Separate from
+    // IsBlocked/BlockReason, which cover blocks that aren't other tracked projects.
+    public List<ProjectBlocker> Blockers { get; set; } = new();
 
     // Optional. Null = no deadline, Urgency is used as-is (the common case).
     // When set, effective urgency ramps toward 10 over the last 14 days

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ProjectManager.Api.Data;
+using ProjectManager.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +13,8 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(connectionString));
+
+builder.Services.AddScoped<BlockingService>();
 
 const string CorsPolicy = "FrontendDev";
 builder.Services.AddCors(options =>

@@ -1,5 +1,7 @@
 namespace ProjectManager.Api.Dtos;
 
+public record BlockerRef(int Id, string Name, string Status, bool IsResolved);
+
 public record ProjectDto(
     int Id,
     string Name,
@@ -14,6 +16,8 @@ public record ProjectDto(
     int Progress,
     bool IsBlocked,
     string? BlockReason,
+    bool IsBlockedByProjects,
+    List<BlockerRef> Blockers,
     DateTime? Deadline,
     DateTime CreatedDate,
     DateTime UpdatedDate,
@@ -31,6 +35,7 @@ public record CreateProjectRequest(
     int Effort = 5,
     bool IsBlocked = false,
     string? BlockReason = null,
+    List<int>? BlockedByProjectIds = null,
     string? FirstActionDescription = null,
     DateTime? Deadline = null);
 
@@ -42,7 +47,7 @@ public record UpdateProjectRequest(
     int Urgency,
     int Effort,
     string Status,
-    int Progress,
     bool IsBlocked,
     string? BlockReason,
+    List<int>? BlockedByProjectIds,
     DateTime? Deadline);

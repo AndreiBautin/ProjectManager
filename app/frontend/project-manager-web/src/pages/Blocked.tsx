@@ -37,16 +37,38 @@ export default function Blocked() {
                 <span className="project-name">{p.name}</span>
                 <span className="project-score">{p.priorityScore}</span>
               </div>
-              <div className="blocked-reason">
-                <strong>Blocked because:</strong> {p.blockReason || '(no reason given)'}
-              </div>
-              <div className="blocked-unblock">
-                <strong>Unblock action:</strong>{' '}
-                {p.currentNextAction ? p.currentNextAction.description : '(none defined yet)'}
-                {p.currentNextAction && !p.currentNextAction.isEligibleNow && (
-                  <span className="date-hint"> - waiting until {formatDate(p.currentNextAction.availableFrom)}</span>
-                )}
-              </div>
+
+              {p.isBlockedByProjects && (
+                <div className="blocked-reason">
+                  <strong>Blocked by:</strong>{' '}
+                  {p.blockers
+                    .filter((b) => !b.isResolved)
+                    .map((b) => b.name)
+                    .join(', ')}
+                </div>
+              )}
+
+              {p.blockReason && (
+                <div className="blocked-reason">
+                  <strong>Blocked because:</strong> {p.blockReason}
+                </div>
+              )}
+
+              {p.isBlockedByProjects ? (
+                <div className="blocked-unblock">
+                  <strong>Own next step (not actionable yet):</strong>{' '}
+                  {p.currentNextAction ? p.currentNextAction.description : '(none defined yet)'}
+                </div>
+              ) : (
+                <div className="blocked-unblock">
+                  <strong>Unblock action:</strong>{' '}
+                  {p.currentNextAction ? p.currentNextAction.description : '(none defined yet)'}
+                  {p.currentNextAction && !p.currentNextAction.isEligibleNow && (
+                    <span className="date-hint"> - waiting until {formatDate(p.currentNextAction.availableFrom)}</span>
+                  )}
+                </div>
+              )}
+
               {recommendation?.projectId === p.id && (
                 <div className="recommended-flag">Currently the top recommendation</div>
               )}
