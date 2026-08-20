@@ -42,4 +42,8 @@ if (app.Environment.IsDevelopment())
 app.UseCors(CorsPolicy);
 app.MapControllers();
 
+// Identity probe used by start.bat to tell this API apart from any other app
+// that happens to be listening on the same port.
+app.MapGet("/api/health", () => Results.Json(new { app = "personal-coo", status = "ok" }));
+
 app.Run();
