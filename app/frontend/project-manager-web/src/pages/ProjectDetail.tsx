@@ -29,10 +29,11 @@ export default function ProjectDetail() {
   const [urgency, setUrgency] = useState(5);
   const [effort, setEffort] = useState(5);
   const [status, setStatus] = useState<ProjectStatus>('Active');
-  const [progress, setProgress] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
   const [blockReason, setBlockReason] = useState('');
   const [deadline, setDeadline] = useState('');
+  const [blockedByProjectIds, setBlockedByProjectIds] = useState<number[]>([]);
+  const [otherProjects, setOtherProjects] = useState<ProjectDto[]>([]);
 
   const applyProjectToForm = (p: ProjectDto) => {
     setName(p.name);
@@ -42,19 +43,24 @@ export default function ProjectDetail() {
     setUrgency(p.urgency);
     setEffort(p.effort);
     setStatus(p.status);
-    setProgress(p.progress);
     setIsBlocked(p.isBlocked);
     setBlockReason(p.blockReason ?? '');
     setDeadline(toDateInputValue(p.deadline));
+    setBlockedByProjectIds(p.blockers.map((b) => b.id));
   };
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [p, cats] = await Promise.all([api.getProject(projectId), api.getCategories()]);
+      const [p, cats, others] = await Promise.all([
+        api.getProject(projectId),
+        api.getCategories(),
+        api.getProjects(),
+      ]);
       setProject(p);
       setCategories(cats);
+      setOtherProjects(others.filter((o) => o.id !== projectId));
       applyProjectToForm(p);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load project.');
@@ -62,6 +68,20 @@ export default function ProjectDetail() {
       setLoading(false);
     }
   }, [projectId]);
+
+  function toggleBlocker(id: number, checked: boolean) {
+    setBlockedByProjectIds((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)));
+  }
+
+  // Candidates to link as a blocker, plus whatever's already linked (even if it's
+  // since become Completed) so the checklist doesn't silently drop it.
+  const blockerCandidates = [
+    ...otherProjects.map((o) => ({ id: o.id, name: o.name, status: o.status })),
+    ...(project?.blockers ?? []).map((b) => ({ id: b.id, name: b.name, status: b.status })),
+  ].reduce<{ id: number; name: string; status: ProjectStatus }[]>((acc, item) => {
+    if (!acc.some((x) => x.id === item.id)) acc.push(item);
+    return acc;
+  }, []).sort((a, b) => a.name.localeCompare(b.name));
 
   useEffect(() => {
     load();
@@ -79,9 +99,9 @@ export default function ProjectDetail() {
         urgency,
         effort,
         status,
-        progress,
         isBlocked,
         blockReason: isBlocked ? blockReason || null : null,
+        blockedByProjectIds,
         deadline: deadline || null,
       });
       setProject(updated);
@@ -147,6 +167,7 @@ export default function ProjectDetail() {
   if (!project) return <p className="muted">Project not found.</p>;
 
   const deadlineDisplay = getDeadlineDisplay(project.deadline);
+  const doneActionCount = project.actions.filter((a) => a.status === 'Done').length;
 
   return (
     <div>
@@ -269,16 +290,17 @@ export default function ProjectDetail() {
             </select>
           </label>
 
-          <label className="field">
-            Progress ({progress}%)
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={progress}
-              onChange={(e) => setProgress(Number(e.target.value))}
-            />
-          </label>
+          <div className="field">
+            Progress ({project.progress}%)
+            <div className="progress-bar">
+              <div className="progress-bar-fill" style={{ width: `${project.progress}%` }} />
+            </div>
+            <p className="muted small">
+              {doneActionCount} of {project.actions.length} task
+              {project.actions.length === 1 ? '' : 's'} done - calculated automatically as you
+              check them off.
+            </p>
+          </div>
 
           <label className="checkbox-label">
             <input type="checkbox" checked={isBlocked} onChange={(e) => setIsBlocked(e.target.checked)} />
@@ -296,6 +318,30 @@ export default function ProjectDetail() {
               />
             </label>
           )}
+
+          <div className="field">
+            Blocked by other projects
+            <div className="blocker-picker">
+              {blockerCandidates.length === 0 && (
+                <p className="muted small">No other projects to link yet.</p>
+              )}
+              {blockerCandidates.map((item) => (
+                <label key={item.id} className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={blockedByProjectIds.includes(item.id)}
+                    onChange={(e) => toggleBlocker(item.id, e.target.checked)}
+                  />
+                  {item.name}
+                  {item.status === 'Completed' && <span className="pill pill-gray">Completed</span>}
+                </label>
+              ))}
+            </div>
+            <p className="muted small">
+              This project won't be recommended until every project checked here is Completed - it
+              auto-clears on its own once they're done.
+            </p>
+          </div>
 
           <div className="detail-actions">
             <button className="btn btn-primary" onClick={handleSave} disabled={saving}>

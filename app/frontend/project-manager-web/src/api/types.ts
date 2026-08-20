@@ -1,6 +1,13 @@
 export type ProjectStatus = 'Active' | 'Blocked' | 'Paused' | 'Completed';
 export type ActionStatus = 'Pending' | 'Done';
 
+export interface BlockerRef {
+  id: number;
+  name: string;
+  status: ProjectStatus;
+  isResolved: boolean;
+}
+
 export interface ActionDto {
   id: number;
   projectId: number;
@@ -27,6 +34,8 @@ export interface ProjectDto {
   progress: number;
   isBlocked: boolean;
   blockReason: string | null;
+  isBlockedByProjects: boolean;
+  blockers: BlockerRef[];
   deadline: string | null;
   createdDate: string;
   updatedDate: string;
@@ -58,6 +67,7 @@ export interface CreateProjectRequest {
   effort?: number;
   isBlocked?: boolean;
   blockReason?: string | null;
+  blockedByProjectIds?: number[] | null;
   firstActionDescription?: string | null;
   deadline?: string | null;
 }
@@ -70,8 +80,8 @@ export interface UpdateProjectRequest {
   urgency: number;
   effort: number;
   status: ProjectStatus;
-  progress: number;
   isBlocked: boolean;
   blockReason: string | null;
+  blockedByProjectIds: number[] | null;
   deadline: string | null;
 }

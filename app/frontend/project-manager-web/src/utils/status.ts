@@ -7,8 +7,10 @@ export interface StatusDisplay {
 
 // Mirrors the color-coding from the design doc:
 // green = Moving Forward, amber = Blocked-but-actionable, blue = Waiting on a
-// date (has a next action, just not eligible yet), red = Blocked-stuck (no
-// defined next action), gray = Paused/Completed/no-op.
+// date (has a next action, just not eligible yet), purple = waiting on other
+// projects (this project's own next action isn't the unblock step - those
+// other projects' actions are), red = Blocked-stuck (no defined next action),
+// gray = Paused/Completed/no-op.
 export function getStatusDisplay(project: ProjectDto): StatusDisplay {
   const action = project.currentNextAction;
 
@@ -17,6 +19,10 @@ export function getStatusDisplay(project: ProjectDto): StatusDisplay {
   }
   if (project.status === 'Paused') {
     return { label: 'Paused', className: 'pill pill-gray' };
+  }
+
+  if (project.status === 'Blocked' && project.isBlockedByProjects) {
+    return { label: 'Blocked - waiting on other projects', className: 'pill pill-purple' };
   }
 
   if (!action) {

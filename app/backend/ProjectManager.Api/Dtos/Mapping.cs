@@ -12,6 +12,15 @@ public static class Mapping
     public static ProjectDto ToDto(this Project p)
     {
         var nextAction = PriorityEngine.GetCurrentNextAction(p);
+        var blockers = p.Blockers
+            .Where(b => b.BlockingProject != null)
+            .Select(b => new BlockerRef(
+                b.BlockingProject!.Id,
+                b.BlockingProject.Name,
+                b.BlockingProject.Status.ToString(),
+                b.BlockingProject.Status == ProjectStatus.Completed))
+            .ToList();
+
         return new ProjectDto(
             p.Id,
             p.Name,
@@ -23,9 +32,11 @@ public static class Mapping
             p.Effort,
             PriorityEngine.ComputeScore(p),
             p.Status.ToString(),
-            p.Progress,
+            PriorityEngine.ComputeProgress(p),
             p.IsBlocked,
             p.BlockReason,
+            PriorityEngine.IsBlockedByOpenProjects(p),
+            blockers,
             p.Deadline,
             p.CreatedDate,
             p.UpdatedDate,

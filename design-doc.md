@@ -18,7 +18,7 @@ Two things change from the original spec, both to keep the data model honest:
 3. **Tie-breaking is undefined.** Two projects can land on the same score. Fix: sort by Priority Score desc → Urgency desc → CreatedDate asc (older items win ties, so nothing quietly rots at the bottom).
 4. **Category as a rigid enum conflicts with "frictionless capture."** Fix: Category is a simple lookup table, not a hardcoded enum — the Add Project screen lets you pick existing or type a new one inline.
 5. **No "last touched" signal.** A project can sit at a middling score forever and never surface. Not solving this in MVP (per "don't overcomplicate"), but the schema includes `UpdatedDate` now so a staleness bonus can be added later without a migration.
-6. **Progress % — manual, not derived.** Auto-computing from completed-actions-count was considered and rejected: actions have uneven weight, so a manual 0–100 field is more honest and just as low-effort to maintain.
+6. **Progress % — derived from completed actions.** Computed as the share of a project's actions that are Done (a Completed project always reads 100%), not a hand-managed field. The earlier manual approach was dropped because keeping a separate 0–100 slider in sync with the checklist was busywork; the checklist is the honest signal of how far along a project is.
 7. **The spec conflates two different "next action" concepts** — each project's own next action, and the single global recommended action. The Command Center needs to surface both: a hero "recommended next action" (one, system-selected) plus each project's own next action in its card (informational, not necessarily the recommendation).
 
 ## 3. MVP Architecture
@@ -68,7 +68,7 @@ Run locally: `dotnet run` for the API (e.g. `localhost:5080`), `npm run dev` for
 | Urgency | int, 1–10, default 5 | |
 | Effort | int, 1–10, default 5 | |
 | Status | enum: Active, Blocked, Paused, Completed | `Blocked` is set automatically when IsBlocked=true; otherwise user sets Active/Paused/Completed |
-| Progress | int, 0–100, default 0 | manual |
+| Progress | int, 0–100 | derived, not stored — % of actions Done (see PriorityEngine.ComputeProgress); Completed = 100 |
 | IsBlocked | bool, default false | |
 | BlockReason | string, nullable | required (in UI) when IsBlocked=true |
 | Deadline | datetime, nullable | optional, project-level only (see Effective Urgency below) |
@@ -131,7 +131,7 @@ This is a straight implementation of the spec's blocker logic — it just reuses
 
 **Projects** — full list/edit surface.
 - Sortable table or card list (score, name, category), all non-Paused and non-Completed by default, with a toggle to include Paused.
-- Click a project → detail panel: edit Impact/Urgency/Effort/Status/Progress/Blocked+Reason, manage its Actions (add, reorder, mark done), "Mark Completed" button.
+- Click a project → detail panel: edit Impact/Urgency/Effort/Status/Blocked+Reason, manage its Actions (add, reorder, mark done); progress shows read-only, derived from the actions. "Mark Completed" button.
 
 **Add Project** — fast capture, optimized for brain-dump.
 - Fields: Name (required, only hard requirement), Category (dropdown + inline "add new"), Description (optional), Impact/Urgency/Effort sliders (default 5), Deadline (optional), Steps (optional), Blocked toggle + reason (optional).

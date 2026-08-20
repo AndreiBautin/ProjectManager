@@ -17,6 +17,7 @@ public class RecommendationController : ControllerBase
     {
         var projects = await _db.Projects
             .Include(p => p.Actions)
+            .Include(p => p.Blockers).ThenInclude(b => b.BlockingProject)
             .AsNoTracking()
             .ToListAsync();
 
