@@ -98,7 +98,26 @@ jobs:
             || { echo "::error::Asset URLs are missing the project base path"; exit 1; }
 
           # Deep links depend on the fallback document being published.
-          curl -fsSL --max-time 30 "${url}projects/1" | grep -q 'id="root"' \
+          #
+          # Note the deliberate absence of curl's -f here. GitHub Pages has no
+          # rewrite rules: it serves 404.html for an unmatched path and returns
+          # a real HTTP 404 with it. The page renders correctly and the router
+          # takes over, but the status code is genuinely 404 - so -f, which
+          # treats any error status as a failure, would fail on a working deep
+          # link. What actually matters is the body, so that is what is checked,
+          # and the status is asserted to be one of the two we expect rather
+          # than ignored.
+          deep_status=$(curl -sS -o /tmp/deep.html -w '%{http_code}' --max-time 30 "${url}projects/1")
+          echo "Deep link returned HTTP $deep_status (404 is expected on Pages)"
+
+          case "$deep_status" in
+            200|404) ;;
+            *) echo "::error::Deep link returned unexpected status $deep_status"; exit 1 ;;
+          esac
+
+          grep -q 'id="root"' /tmp/deep.html \
             || { echo "::error::Deep link did not serve the SPA shell"; exit 1; }
+          grep -q "/${{ github.event.repository.name }}/assets/" /tmp/deep.html \
+            || { echo "::error::Deep link shell is missing the project base path"; exit 1; }
 
           echo "Smoke test passed."
