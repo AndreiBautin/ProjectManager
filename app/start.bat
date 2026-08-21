@@ -41,8 +41,10 @@ if "!PORTSTATE!"=="foreign" (
     call :conflict %FRONTEND_PORT% frontend
     if "!RESOLVED!"=="0" goto :abort
 )
+set "FRONTEND_UP=0"
 if "!PORTSTATE!"=="ours" (
     echo Frontend already running on port %FRONTEND_PORT% - reusing it.
+    set "FRONTEND_UP=1"
 ) else (
     echo Starting frontend...
     start "Personal COO - Frontend" cmd /k ""%ROOT%frontend\project-manager-web\run-frontend.bat""
@@ -50,6 +52,7 @@ if "!PORTSTATE!"=="ours" (
     call :probe %FRONTEND_PORT% frontend 60
     if "!PORTSTATE!"=="ours" (
         echo Frontend is up.
+        set "FRONTEND_UP=1"
     ) else (
         echo.
         echo WARNING: Frontend did not come up within the timeout.
@@ -59,8 +62,14 @@ if "!PORTSTATE!"=="ours" (
 )
 
 echo.
-echo Opening %APP_URL% ...
-start "" %APP_URL%
+if "!FRONTEND_UP!"=="1" (
+    echo Opening %APP_URL% ...
+    start "" %APP_URL%
+) else (
+    echo NOT opening %APP_URL% - the frontend is not serving, so the browser
+    echo would only show that the site cannot be reached. Fix the error shown
+    echo in the "Personal COO - Frontend" window, then run this again.
+)
 
 echo.
 echo The app runs in two windows (backend + frontend). Close either window to
