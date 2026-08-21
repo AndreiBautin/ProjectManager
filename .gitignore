@@ -4,15 +4,34 @@ obj/
 *.user
 *.suo
 
-# SQLite data (personal data, never commit)
+# SQLite data (PERSONAL DATA - never commit).
+# The trailing-glob variants matter: a plain "*.db" does NOT match
+# "projectmanager.db.backup-20260820-110842", which is exactly how a personal
+# database ends up in a public repository.
 *.db
 *.db-shm
 *.db-wal
+*.db.*
+*.sqlite
+*.sqlite3
+*.sqlite.*
+*.bak
+*backup*
+
+# Local environment overrides. .env.example IS committed; nothing else is.
+.env
+.env.*
+!.env.example
 
 # Node / frontend
 node_modules/
 dist/
 .vite/
+
+# Test/coverage output
+TestResults/
+coverage/
+*.trx
 
 # Editor/OS
 .vs/
@@ -21,3 +40,6 @@ dist/
 *.swp
 .DS_Store
 Thumbs.db
+
+# Claude Code local tooling (machine-specific, not part of the app)
+.claude/

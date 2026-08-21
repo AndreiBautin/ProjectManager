@@ -4,6 +4,7 @@ using ProjectManager.Api.Data;
 using ProjectManager.Api.Dtos;
 using ProjectManager.Api.Models;
 using ProjectManager.Api.Services;
+using ProjectManager.Api.Validation;
 
 namespace ProjectManager.Api.Controllers;
 
@@ -70,8 +71,8 @@ public class ProjectsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ProjectDto>> Create(CreateProjectRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
-            return BadRequest("Project name is required.");
+        var validationErrors = RequestValidator.ValidateCreateProject(request);
+        if (validationErrors.Count > 0) return BadRequest(string.Join(" ", validationErrors));
 
         var blockerIds = (request.BlockedByProjectIds ?? new List<int>()).Distinct().ToList();
         var blockerError = await _blocking.ValidateBlockersAsync(0, blockerIds);
@@ -102,9 +103,9 @@ public class ProjectsController : ControllerBase
             Name = request.Name.Trim(),
             Description = request.Description,
             CategoryId = categoryId,
-            Impact = Clamp(request.Impact),
-            Urgency = Clamp(request.Urgency),
-            Effort = Clamp(request.Effort),
+            Impact = request.Impact,
+            Urgency = request.Urgency,
+            Effort = request.Effort,
             IsBlocked = request.IsBlocked,
             BlockReason = request.IsBlocked ? request.BlockReason : null,
             Deadline = request.Deadline,
@@ -142,6 +143,12 @@ public class ProjectsController : ControllerBase
         var project = await ProjectsWithIncludes().FirstOrDefaultAsync(p => p.Id == id);
         if (project == null) return NotFound();
 
+        // Update used to skip validation entirely and call request.Name.Trim()
+        // unguarded, so a project could be renamed to "" and a null name produced
+        // a 500 instead of a 400.
+        var validationErrors = RequestValidator.ValidateUpdateProject(request);
+        if (validationErrors.Count > 0) return BadRequest(string.Join(" ", validationErrors));
+
         if (!Enum.TryParse<ProjectStatus>(request.Status, true, out var requestedStatus))
             return BadRequest("Invalid status value.");
 
@@ -152,9 +159,9 @@ public class ProjectsController : ControllerBase
         project.Name = request.Name.Trim();
         project.Description = request.Description;
         project.CategoryId = request.CategoryId;
-        project.Impact = Clamp(request.Impact);
-        project.Urgency = Clamp(request.Urgency);
-        project.Effort = Clamp(request.Effort);
+        project.Impact = request.Impact;
+        project.Urgency = request.Urgency;
+        project.Effort = request.Effort;
         project.IsBlocked = request.IsBlocked;
         project.BlockReason = request.IsBlocked ? request.BlockReason : null;
         project.Deadline = request.Deadline;
@@ -230,5 +237,4 @@ public class ProjectsController : ControllerBase
         return NoContent();
     }
 
-    private static int Clamp(int value) => Math.Clamp(value, 1, 10);
 }

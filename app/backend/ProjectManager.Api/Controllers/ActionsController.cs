@@ -4,6 +4,7 @@ using ProjectManager.Api.Data;
 using ProjectManager.Api.Dtos;
 using ProjectManager.Api.Models;
 using ProjectManager.Api.Services;
+using ProjectManager.Api.Validation;
 
 namespace ProjectManager.Api.Controllers;
 
@@ -24,8 +25,8 @@ public class ActionsController : ControllerBase
         var project = await _db.Projects.Include(p => p.Actions).FirstOrDefaultAsync(p => p.Id == projectId);
         if (project == null) return NotFound("Project not found.");
 
-        if (string.IsNullOrWhiteSpace(request.Description))
-            return BadRequest("Action description is required.");
+        var validationErrors = RequestValidator.ValidateCreateAction(request);
+        if (validationErrors.Count > 0) return BadRequest(string.Join(" ", validationErrors));
 
         var order = request.Order ?? (project.Actions.Count == 0 ? 1 : project.Actions.Max(a => a.Order) + 1);
 
@@ -54,6 +55,9 @@ public class ActionsController : ControllerBase
             .Include(a => a.Project).ThenInclude(p => p!.Blockers).ThenInclude(b => b.BlockingProject)
             .FirstOrDefaultAsync(a => a.Id == id);
         if (action == null) return NotFound();
+
+        var validationErrors = RequestValidator.ValidateUpdateAction(request);
+        if (validationErrors.Count > 0) return BadRequest(string.Join(" ", validationErrors));
 
         if (!string.IsNullOrWhiteSpace(request.Description))
             action.Description = request.Description.Trim();

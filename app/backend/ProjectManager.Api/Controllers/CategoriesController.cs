@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using ProjectManager.Api.Data;
 using ProjectManager.Api.Dtos;
 using ProjectManager.Api.Models;
+using ProjectManager.Api.Validation;
 
 namespace ProjectManager.Api.Controllers;
 
@@ -26,9 +27,10 @@ public class CategoriesController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<CategoryDto>> Create(CreateCategoryRequest request)
     {
+        var validationErrors = RequestValidator.ValidateCategoryName(request.Name);
+        if (validationErrors.Count > 0) return BadRequest(string.Join(" ", validationErrors));
+
         var name = request.Name.Trim();
-        if (string.IsNullOrWhiteSpace(name))
-            return BadRequest("Category name is required.");
 
         var existing = await _db.Categories
             .FirstOrDefaultAsync(c => c.Name.ToLower() == name.ToLower());

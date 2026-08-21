@@ -1,0 +1,59 @@
+# Render Blueprint for the Personal COO demo API.
+#
+# Render reads this file when you create a Blueprint from the repository, so the
+# service is defined in version control rather than clicked together in a
+# dashboard. See docs/DEPLOYMENT.md for the walkthrough.
+#
+# Everything here fits Render's free tier: no credit card, 750 instance-hours a
+# month, and the service is suspended rather than billed if a limit is hit.
+
+services:
+  - type: web
+    name: personal-coo-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./app/backend/ProjectManager.Api/Dockerfile
+    dockerContext: ./app/backend/ProjectManager.Api
+
+    # Render polls this while starting and after a deploy. It returns only
+    # scalars about the running build - no data.
+    healthCheckPath: /api/health
+
+    autoDeploy: true
+
+    envVars:
+      # The whole point. Demo mode seeds a generated fixture and pins the
+      # database to demo.db, which no other configuration value can override.
+      - key: DEMO_MODE
+        value: "true"
+
+      # Explicit allow-list. This must match the GitHub Pages origin exactly -
+      # scheme and host, no path and no trailing slash. Update it if the Pages
+      # URL changes; a mismatch shows up as CORS errors in the browser console
+      # while the API itself looks perfectly healthy.
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://andreibautin.github.io"
+
+      # Swagger is a live, writable interface onto a public unauthenticated API.
+      # Left off deliberately - see docs/SECURITY.md.
+      - key: ENABLE_SWAGGER
+        value: "false"
+
+      - key: LOG_LEVEL
+        value: "Information"
+
+      # Render substitutes the deployed commit, so /api/health ties the running
+      # service back to the exact source it was built from.
+      - key: BUILD_COMMIT
+        fromService:
+          type: web
+          name: personal-coo-api
+          property: commit
+
+# NOTE ON PERSISTENCE: free web services get no persistent disk, so the SQLite
+# file lives in the container filesystem and is lost on redeploy or spin-down.
+# For a demo that is the desired behaviour, not a limitation to work around -
+# every cold start reseeds a pristine dataset, and anything a visitor types
+# disappears within about fifteen minutes of inactivity. It is what bounds the
+# exposure of running an unauthenticated public API.

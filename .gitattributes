@@ -1,0 +1,15 @@
+# Normalize line endings. Development happens on Windows, CI runs on Linux.
+# Without this, a formatting or diff gate passes in one place and fails in the
+# other, which is worse than having no gate at all.
+* text=auto eol=lf
+
+# Windows-only launchers must keep CRLF or cmd.exe mis-parses them.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.db binary

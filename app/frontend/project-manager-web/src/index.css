@@ -651,3 +651,78 @@ h1 {
   border-radius: 8px;
   padding: 0.6rem 0.9rem;
 }
+
+/* ---- Deployment-related chrome: demo banner, cold-start hint, build id ---- */
+
+.demo-banner {
+  background: var(--blue-bg);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  padding: 0.6rem 1.25rem;
+}
+
+.demo-banner strong {
+  color: var(--blue);
+}
+
+.waking-banner {
+  background: var(--amber-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  margin: 0.75rem 1.25rem 0;
+  padding: 0.6rem 0.9rem;
+}
+
+.app-footer {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  display: flex;
+  font-size: 0.72rem;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+  padding: 0.7rem 1.25rem;
+}
+
+/* ---- Error boundary ---- */
+
+.error-boundary {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin: 2rem auto;
+  max-width: 46rem;
+  padding: 2rem;
+}
+
+.error-boundary h1 {
+  margin-top: 0;
+}
+
+.error-boundary-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin: 1.25rem 0;
+}
+
+.error-boundary-detail {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--red);
+  font-size: 0.75rem;
+  max-height: 22rem;
+  overflow: auto;
+  padding: 0.9rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.error-boundary-build {
+  font-size: 0.75rem;
+}

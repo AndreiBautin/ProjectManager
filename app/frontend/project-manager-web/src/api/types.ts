@@ -85,3 +85,12 @@ export interface UpdateProjectRequest {
   blockedByProjectIds: number[] | null;
   deadline: string | null;
 }
+
+/** Response from GET /api/health - scalars about the running build only. */
+export interface HealthDto {
+  app: string;
+  status: string;
+  demoMode: boolean;
+  version: string;
+  commit: string;
+}

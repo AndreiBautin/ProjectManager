@@ -1,0 +1,104 @@
+name: Deploy frontend to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Authenticates with the workflow's built-in token. No account to create, no
+# secret to store, nothing to rotate - which is most of why GitHub Pages was
+# chosen for the frontend over an equally free alternative.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never two deploys at once; let a newer commit finish rather than cancelling it
+# and leaving the site on whatever happened to be published last.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/frontend/project-manager-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/frontend/project-manager-web/package-lock.json
+
+      - name: Install (frozen lockfile)
+        run: npm ci
+
+      - name: Build
+        env:
+          # A project site is served from /<repo>/. This one value reaches both
+          # Vite's asset base and the router basename - see src/config.ts - so
+          # they cannot disagree and produce working assets with 404ing routes.
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+          VITE_API_BASE_URL: ${{ vars.API_BASE_URL || 'https://personal-coo-api.onrender.com/api' }}
+          VITE_DEMO_MODE: 'true'
+          VITE_BUILD_COMMIT: ${{ github.sha }}
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/frontend/project-manager-web/dist
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      # A green deploy step only proves an upload succeeded. This proves the site
+      # actually answered, and answered with the app rather than a Pages 404 or a
+      # stale placeholder.
+      - name: Smoke test the live site
+        run: |
+          url="${{ steps.deployment.outputs.page_url }}"
+          echo "Smoke testing $url"
+
+          for attempt in 1 2 3 4 5; do
+            body=$(curl -fsSL --max-time 30 "$url" || true)
+            if [ -n "$body" ]; then break; fi
+            echo "Attempt $attempt: no response yet, waiting for propagation..."
+            sleep 10
+          done
+
+          if [ -z "$body" ]; then
+            echo "::error::Live site did not respond at $url"
+            exit 1
+          fi
+
+          echo "$body" | grep -q 'id="root"' \
+            || { echo "::error::Response did not contain the SPA mount point"; exit 1; }
+          echo "$body" | grep -q '<title>Personal COO</title>' \
+            || { echo "::error::Response did not contain the expected title"; exit 1; }
+
+          # Assets must be prefixed with the repo path. Without this the page
+          # loads, requests /assets/... from the domain root, and renders blank.
+          echo "$body" | grep -q '/${{ github.event.repository.name }}/assets/' \
+            || { echo "::error::Asset URLs are missing the project base path"; exit 1; }
+
+          # Deep links depend on the fallback document being published.
+          curl -fsSL --max-time 30 "${url}projects/1" | grep -q 'id="root"' \
+            || { echo "::error::Deep link did not serve the SPA shell"; exit 1; }
+
+          echo "Smoke test passed."

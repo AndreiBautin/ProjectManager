@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Read-only. Nothing in this workflow publishes anything.
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend - build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore app/backend/ProjectManager.Tests/ProjectManager.Tests.csproj
+
+      # Warnings are errors here. The baseline was zero warnings, and a gate that
+      # tolerates "just a few" stops being a gate the first week someone adds one.
+      - name: Build
+        run: dotnet build app/backend/ProjectManager.Tests/ProjectManager.Tests.csproj
+             --configuration Release --no-restore -warnaserror
+
+      - name: Test
+        run: dotnet test app/backend/ProjectManager.Tests/ProjectManager.Tests.csproj
+             --configuration Release --no-build --verbosity normal
+
+  frontend:
+    name: Frontend - lint, typecheck & build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/frontend/project-manager-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/frontend/project-manager-web/package-lock.json
+
+      # `npm ci`, not `npm install`: it installs exactly the lockfile and FAILS
+      # if package.json and the lockfile have drifted, instead of quietly
+      # resolving something else and building a bundle nobody tested.
+      - name: Install (frozen lockfile)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build (default configuration)
+        run: npm run build
+
+      # Build every configuration that actually ships. The demo build sets a base
+      # path and an absolute API origin, and those only take effect at build time
+      # - so a failure unique to the demo config would otherwise first surface
+      # during a deploy, which is the worst possible place to find it.
+      - name: Build (demo configuration)
+        env:
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+          VITE_API_BASE_URL: https://personal-coo-api.onrender.com/api
+          VITE_DEMO_MODE: 'true'
+          VITE_BUILD_COMMIT: ${{ github.sha }}
+        run: npm run build
+
+      # The SPA fallback is what makes deep links work on GitHub Pages. If it
+      # ever silently stops being emitted, every route except "/" 404s in
+      # production while the build still reports success.
+      - name: Assert the SPA fallback was emitted
+        run: test -f dist/404.html
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Gated at `high`. Low and moderate findings in build-time transitive
+      # dependencies are constant background noise, and a gate that fires
+      # constantly is a gate people learn to click past.
+      - name: npm audit
+        working-directory: app/frontend/project-manager-web
+        run: npm audit --audit-level=high
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: dotnet vulnerable package scan
+        run: |
+          dotnet restore app/backend/ProjectManager.Tests/ProjectManager.Tests.csproj
+          output=$(dotnet list app/backend/ProjectManager.Tests/ProjectManager.Tests.csproj \
+            package --vulnerable --include-transitive 2>&1)
+          echo "$output"
+          if echo "$output" | grep -qiE '\b(High|Critical)\b'; then
+            echo "::error::High or critical severity vulnerable NuGet package found"
+            exit 1
+          fi
+
+  secrets:
+    name: Secret scan (full history)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Scanning the working tree only would miss a credential that was
+          # committed and then deleted - which is still a leaked credential.
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # A belt-and-braces check for the specific mistake this repository is most
+      # exposed to: the personal SQLite database is one `git add -A` away from
+      # being published, and .gitignore is the only thing preventing it.
+      - name: Assert no database file is tracked
+        run: |
+          if git ls-files | grep -iE '\.(db|sqlite3?)(\..*)?$|backup'; then
+            echo "::error::A database or backup file is tracked in git."
+            exit 1
+          fi
+          echo "No database or backup files tracked."
