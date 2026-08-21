@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
+import ErrorBanner from '../components/ErrorBanner';
 import type { ProjectDto } from '../api/types';
 import { formatDate } from '../utils/status';
 
@@ -13,21 +14,30 @@ function isWithinDays(iso: string | null, days: number): boolean {
 export default function Completed() {
   const [projects, setProjects] = useState<ProjectDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+
+  // Named rather than inline so the error banner's Retry can re-run exactly the
+  // same load, instead of the user having to reload the whole page.
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const list = await api.getProjects('Completed');
+      setProjects(
+        [...list].sort(
+          (a, b) => new Date(b.completedDate ?? 0).getTime() - new Date(a.completedDate ?? 0).getTime(),
+        ),
+      );
+    } catch (e) {
+      setError(e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    api
-      .getProjects('Completed')
-      .then((list) =>
-        setProjects(
-          [...list].sort(
-            (a, b) => new Date(b.completedDate ?? 0).getTime() - new Date(a.completedDate ?? 0).getTime(),
-          ),
-        ),
-      )
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load.'))
-      .finally(() => setLoading(false));
-  }, []);
+    load();
+  }, [load]);
 
   const counts = useMemo(
     () => ({
@@ -43,7 +53,7 @@ export default function Completed() {
   return (
     <div>
       <h1>Completed</h1>
-      {error && <div className="error-banner">{error}</div>}
+      {error != null && <ErrorBanner error={error} onRetry={load} />}
 
       <div className="stats-row">
         <div className="stat-box">

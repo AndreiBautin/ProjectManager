@@ -51,3 +51,18 @@ export const IS_DEMO: boolean = import.meta.env.VITE_DEMO_MODE === 'true';
  * that long reads as a broken site.
  */
 export const SLOW_REQUEST_HINT_MS = 2500;
+
+/**
+ * Backoff schedule for retrying a read that could not reach the API.
+ *
+ * A sleeping free-tier instance does not answer slowly - it does not answer at
+ * all, so the very first request after 15 minutes of quiet *fails*. Without
+ * retries the first visitor gets a dead end and has to know to reload, which
+ * is exactly the wrong first impression.
+ *
+ * These five delays span roughly 75 seconds, which comfortably covers Render's
+ * documented cold start of about a minute. They are deliberately increasing:
+ * an instance that is genuinely gone should not be hammered, and one that is
+ * waking needs time rather than frequency.
+ */
+export const COLD_START_RETRY_DELAYS_MS = [2000, 5000, 12000, 25000, 30000];

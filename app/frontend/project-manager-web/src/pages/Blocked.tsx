@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
+import ErrorBanner from '../components/ErrorBanner';
 import type { ProjectDto, RecommendationResult } from '../api/types';
 import { formatDate } from '../utils/status';
 
@@ -8,24 +9,34 @@ export default function Blocked() {
   const [projects, setProjects] = useState<ProjectDto[]>([]);
   const [recommendation, setRecommendation] = useState<RecommendationResult | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+
+  // Named rather than inline so the error banner's Retry can re-run exactly the
+  // same load, instead of the user having to reload the whole page.
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [list, rec] = await Promise.all([api.getProjects('Blocked'), api.getRecommendation()]);
+      setProjects(list);
+      setRecommendation(rec);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    Promise.all([api.getProjects('Blocked'), api.getRecommendation()])
-      .then(([list, rec]) => {
-        setProjects(list);
-        setRecommendation(rec);
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load.'))
-      .finally(() => setLoading(false));
-  }, []);
+    load();
+  }, [load]);
 
   if (loading) return <p className="muted">Loading...</p>;
 
   return (
     <div>
       <h1>Blocked</h1>
-      {error && <div className="error-banner">{error}</div>}
+      {error != null && <ErrorBanner error={error} onRetry={load} />}
 
       {projects.length === 0 ? (
         <p className="muted">Nothing is blocked right now.</p>

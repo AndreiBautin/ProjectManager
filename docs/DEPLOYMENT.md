@@ -238,7 +238,8 @@ and the next start reseeds a pristine fixture into an empty database.
 | Page loads blank, console shows 404s for `/assets/*.js` | `VITE_BASE_PATH` missing, so assets are requested from the domain root | The Pages workflow sets it from the repo name; check it was not overridden |
 | Page renders, every route except `/` 404s | `dist/404.html` missing | CI asserts it exists; check `scripts/spa-fallback.mjs` ran after `vite build` |
 | Data never loads; console shows a CORS error; `/api/health` is fine | `CORS_ALLOWED_ORIGINS` does not match the Pages origin exactly | Origin only — `https://user.github.io`, no path, no trailing slash. A path is stripped with a warning in the startup log |
-| First load hangs ~60s, then works | Render free instance was asleep | Expected. The app shows a "waking the API" banner after 2.5s |
+| First load takes ~60s, then works | Render free instance was asleep | Expected. The client retries reads across a ~74s window and the banner counts the attempts; it recovers without a reload |
+| "Could not reach the API after 6 attempts" | The Render service does not exist, is suspended, or the URL is wrong | Check the service exists and `VITE_API_BASE_URL` matches it. This message means the client already waited out a full cold-start window, so waiting longer will not help |
 | API returns 429 | Rate limiter — 120 requests/min per IP | Wait a minute |
 | Render deploy fails on `USER $APP_UID` | Base image predates `.NET 8` | Pin `mcr.microsoft.com/dotnet/aspnet:8.0` |
 | API starts then immediately exits | Port binding — `PORT` resolved at build time instead of runtime | The Dockerfile reads `$PORT` in its `ENTRYPOINT` shell; do not move it to `ENV` |

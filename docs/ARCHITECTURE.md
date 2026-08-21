@@ -163,8 +163,26 @@ Three distinct layers, each catching what the one below cannot:
 | --- | --- | --- |
 | Invalid input | `RequestValidator` → `400` | The specific field and value that was refused |
 | Unhandled server exception | `ExceptionHandlingMiddleware` → `500` | A correlation id; the detail only in development |
-| API unreachable | `ApiError(isNetworkError)` | "The free-tier server may still be waking up" |
+| API unreachable | `client.ts` retries reads across a cold-start window | A banner counting the retry attempts, then a message and a Retry button |
 | Render-time exception | `ErrorBoundary` | A recovery screen, not a blank page |
+
+### Cold starts are a first-class case, not an error
+
+The free-tier API sleeps after 15 minutes. It then does not answer *slowly* — it
+does not answer *at all*, so `fetch` rejects outright. Treating that as a plain
+failure meant the first visitor after a quiet period hit a dead end and had to
+know to reload.
+
+So `request()` retries reads on a backoff spanning ~74 seconds
+(`COLD_START_RETRY_DELAYS_MS`), covering Render's documented ~1 minute wake, and
+publishes attempt progress so the banner reads as progress rather than a hang.
+Gateway statuses (502–504) retry too — the same cold start seen from a different
+angle.
+
+**Only `GET` and `HEAD` are retried.** A network failure is ambiguous by
+construction: the browser cannot tell whether the request reached the server
+before the connection died, so replaying a `POST` risks creating the same
+project twice. A failed write surfaces immediately and the user decides.
 
 ## Auth
 

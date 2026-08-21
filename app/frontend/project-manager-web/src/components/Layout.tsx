@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { api, onSlowRequest } from '../api/client';
+import { api, onRequestProgress } from '../api/client';
+import type { RequestProgress } from '../api/client';
 import { BUILD_COMMIT, IS_DEMO } from '../config';
 import type { HealthDto } from '../api/types';
 
@@ -13,12 +14,14 @@ const navItems = [
 ];
 
 export default function Layout() {
-  const [slow, setSlow] = useState(false);
+  const [progress, setProgress] = useState<RequestProgress | null>(null);
   const [health, setHealth] = useState<HealthDto | null>(null);
 
   // Tells the user the free-tier API is waking up rather than leaving an
-  // unexplained spinner on screen for the better part of a minute.
-  useEffect(() => onSlowRequest(setSlow), []);
+  // unexplained spinner on screen for the better part of a minute - and, once
+  // the client starts retrying, says which attempt it is on so the wait reads
+  // as progress rather than as a hang.
+  useEffect(() => onRequestProgress(setProgress), []);
 
   // Build identification: which API build is this page actually talking to.
   // Failure here is not worth surfacing - it is a footer, and the pages
@@ -59,10 +62,20 @@ export default function Layout() {
         </nav>
       </header>
 
-      {slow && (
+      {progress?.pending && (
         <div className="waking-banner">
-          Waking the API. The demo backend sleeps after 15 minutes of inactivity and takes about a
-          minute to start - this only happens on the first request.
+          {progress.attempt > 0 ? (
+            <>
+              The API did not answer - retrying (attempt {progress.attempt} of{' '}
+              {progress.maxAttempts}). A sleeping free-tier server takes about a minute to
+              start, so this is expected on the first visit.
+            </>
+          ) : (
+            <>
+              Waking the API. The demo backend sleeps after 15 minutes of inactivity and takes
+              about a minute to start - this only happens on the first request.
+            </>
+          )}
         </div>
       )}
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
+import ErrorBanner from '../components/ErrorBanner';
 import type { CategoryDto, ProjectDto, ProjectStatus } from '../api/types';
 import { formatDate, toDateInputValue, dateInputClass, getDeadlineDisplay } from '../utils/status';
 
@@ -15,7 +16,7 @@ export default function ProjectDetail() {
   const [categories, setCategories] = useState<CategoryDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const [newActionText, setNewActionText] = useState('');
   const [newActionDate, setNewActionDate] = useState('');
   const [newCategoryText, setNewCategoryText] = useState('');
@@ -63,7 +64,7 @@ export default function ProjectDetail() {
       setOtherProjects(others.filter((o) => o.id !== projectId));
       applyProjectToForm(p);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load project.');
+      setError(e);
     } finally {
       setLoading(false);
     }
@@ -107,7 +108,7 @@ export default function ProjectDetail() {
       setProject(updated);
       applyProjectToForm(updated);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save.');
+      setError(e);
     } finally {
       setSaving(false);
     }
@@ -179,7 +180,7 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error != null && <ErrorBanner error={error} onRetry={load} />}
 
       <div className="detail-grid">
         <section className="detail-panel">

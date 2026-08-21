@@ -726,3 +726,21 @@ h1 {
 .error-boundary-build {
   font-size: 0.75rem;
 }
+
+/* Error banner: message, an optional explanation, and a Retry that re-runs the
+   failed load rather than making the user reload the page. */
+
+.error-banner-message {
+  font-weight: 600;
+}
+
+.error-banner-hint {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  margin-top: 0.35rem;
+}
+
+.error-banner-retry {
+  margin-top: 0.75rem;
+}

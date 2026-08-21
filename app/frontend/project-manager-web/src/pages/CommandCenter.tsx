@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
+import ErrorBanner from '../components/ErrorBanner';
 import type { ProjectDto, RecommendationResult } from '../api/types';
 import ProjectCard from '../components/ProjectCard';
 
@@ -8,7 +9,7 @@ export default function CommandCenter() {
   const [recommendation, setRecommendation] = useState<RecommendationResult | null>(null);
   const [projects, setProjects] = useState<ProjectDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const [marking, setMarking] = useState(false);
 
   const load = useCallback(async () => {
@@ -21,7 +22,7 @@ export default function CommandCenter() {
       setRecommendation(rec);
       setProjects(list);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load.');
+      setError(e);
     } finally {
       setLoading(false);
     }
@@ -38,7 +39,7 @@ export default function CommandCenter() {
       await api.updateAction(recommendation.actionId, { status: 'Done' });
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to mark action done.');
+      setError(e);
     } finally {
       setMarking(false);
     }
@@ -48,7 +49,7 @@ export default function CommandCenter() {
 
   return (
     <div>
-      {error && <div className="error-banner">{error}</div>}
+      {error != null && <ErrorBanner error={error} onRetry={load} />}
 
       <section className="hero-card">
         <div className="hero-label">Recommended next action</div>

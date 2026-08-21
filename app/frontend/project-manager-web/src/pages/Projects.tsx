@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
+import ErrorBanner from '../components/ErrorBanner';
 import type { ProjectDto } from '../api/types';
 import ProjectCard from '../components/ProjectCard';
 
@@ -8,7 +9,7 @@ export default function Projects() {
   const [projects, setProjects] = useState<ProjectDto[]>([]);
   const [includePaused, setIncludePaused] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
 
   const load = useCallback(async (withPaused: boolean) => {
     setLoading(true);
@@ -17,7 +18,7 @@ export default function Projects() {
       const list = await api.getProjects(withPaused ? undefined : 'Active,Blocked');
       setProjects(list);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load projects.');
+      setError(e);
     } finally {
       setLoading(false);
     }
@@ -46,7 +47,7 @@ export default function Projects() {
         </div>
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error != null && <ErrorBanner error={error} onRetry={() => load(includePaused)} />}
 
       {loading ? (
         <p className="muted">Loading...</p>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
+import ErrorBanner from '../components/ErrorBanner';
 import type { CategoryDto } from '../api/types';
 import { dateInputClass } from '../utils/status';
 
@@ -28,7 +29,7 @@ export default function AddProject() {
   const [categories, setCategories] = useState<CategoryDto[]>([]);
   const [form, setForm] = useState(DEFAULTS);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const [justSaved, setJustSaved] = useState<string | null>(null);
   const [showNewCategory, setShowNewCategory] = useState(false);
 
@@ -99,7 +100,7 @@ export default function AddProject() {
         navigate(`/projects/${created.id}`);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create project.');
+      setError(e);
     } finally {
       setSaving(false);
     }
@@ -110,7 +111,7 @@ export default function AddProject() {
       <h1>Add project</h1>
       <p className="muted">Dump it here now, prioritize it later. Only the name is required.</p>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error != null && <ErrorBanner error={error} />}
       {justSaved && <div className="success-banner">{justSaved}</div>}
 
       <section className="detail-panel narrow">
