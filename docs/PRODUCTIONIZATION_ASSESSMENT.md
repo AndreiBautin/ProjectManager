@@ -204,9 +204,10 @@ Each of those would look like protection while protecting nothing.
 
 This is the highest-consequence section.
 
-1. The live SQLite DB contains **real personal data** — verified: retirement account
-   details, employer names, financial task descriptions. It must never reach a
-   deployed environment, and it must never reach git.
+1. The live SQLite DB contains **real personal data** — verified by inspection:
+   financial and employment records. It must never reach a
+   deployed environment, and it must never reach git. (Deliberately not itemised
+   further here: this document is public.)
 2. `.gitignore` does not currently cover `*.db.backup-*`. **This is the single most
    dangerous line in the repo** — see S1.
 3. The deployed app must be seeded from a **generated fixture checked into the

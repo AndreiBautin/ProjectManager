@@ -16,6 +16,11 @@ server restarts. Edit and delete freely; nothing there is real.
 > The API runs on a free instance that sleeps after 15 minutes of inactivity. If
 > the page loads but the data does not, the backend is waking up — it takes about
 > a minute, and the app tells you that is what is happening.
+>
+> **Status:** the frontend is deployed. The API is not yet — the Render service
+> still needs to be created (see [DEPLOYMENT.md](docs/DEPLOYMENT.md#2-create-the-render-service)),
+> so right now the app loads and reports that it cannot reach the API. Delete
+> this note once the backend is up.
 
 ---
 
